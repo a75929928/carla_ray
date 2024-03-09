@@ -45,7 +45,7 @@ class CustomDQNTrainer(DQNTrainer):
 env_config = {
     "RAY": True,  # Are we running an experiment in Ray
     "DEBUG_MODE": False,
-    "Experiment": "experiment2",
+    "Experiment": "experiment_birdview",
 }
 
 
@@ -102,9 +102,9 @@ def run(args):
                     "env": CarlaEnv,
                     "env_config": env_config,
                     "framework": "torch",
-                    "num_gpus_per_worker": 0,
+                    "num_gpus_per_worker": 1,
                     "num_cpus_per_worker": 20,
-                    "num_workers": 0,
+                    "num_workers": 1,
                     "exploration_config": {
                         "type": "EpsilonGreedy",
                         "initial_epsilon": 1.0,
@@ -126,6 +126,7 @@ def run(args):
                         ],
                     },
                 },
+                # resources_per_trial = {"cpu": 8, "gpu": 1}
             )
             ray.shutdown()
             checkpoint = find_latest_checkpoint(args)

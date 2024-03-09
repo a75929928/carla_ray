@@ -253,11 +253,17 @@ class BaseExperiment:
     def get_observation(self, core):
 
         info = {}
-        for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
-            if len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"]) != len(self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]):
-                raise Exception("You need to specify the CAMERA_OBSERVATION for each sensor.")
-            if self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
-                self.observation['camera'].append(core.get_camera_data())
+
+        if len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"]) != len(self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]):
+            raise Exception("You need to specify the CAMERA_OBSERVATION for each sensor.")
+        
+        # for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
+        #     if self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
+        #         # np.concatenate(self.observation['camera'], core.get_camera_data())
+        #         self.observation['camera'].append(core.get_camera_data())
+
+        self.observation['camera'] = core.get_camera_data()
+                
         if self.experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:
             self.observation["collision"] = core.get_collision_data()
         if self.experiment_config["OBSERVATION_CONFIG"]["LOCATION_OBSERVATION"]:
@@ -285,9 +291,10 @@ class BaseExperiment:
 
     def update_measurements(self, core):
 
-        for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
-            if len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"]) != len(self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]):
+        if len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"]) != len(self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]):
                 raise Exception("You need to specify the CAMERA_OBSERVATION for each sensor.")
+        
+        for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
             if self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
                 core.update_camera()
         if self.experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:

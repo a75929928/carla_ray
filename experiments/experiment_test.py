@@ -13,9 +13,15 @@ SERVER_VIEW_CONFIG = {
 }
 
 SENSOR_CONFIG = {
-    "CAMERA_NORMALIZED": [True], # apparently doesnt work if set to false, its just for the image!
+    "SENSOR": [SensorsEnum.LIDAR],
+    # "SENSOR": [SensorsEnum.CAMERA_RGB],
+    "SENSOR_TRANSFORM": [SensorsTransformEnum.Transform_A],
+    "CAMERA_X": 84,
+    "CAMERA_Y": 84,
+    "CAMERA_FOV": 60,
+    "CAMERA_NORMALIZED": [True],
     "CAMERA_GRAYSCALE": [True],
-    "FRAMESTACK": 4,
+    "FRAMESTACK": 1,
 }
 
 BIRDVIEW_CONFIG = {
@@ -25,8 +31,14 @@ BIRDVIEW_CONFIG = {
 }
 
 OBSERVATION_CONFIG = {
-    "CAMERA_OBSERVATION": [False],
-    "BIRDVIEW_OBSERVATION": True,
+    "CAMERA_OBSERVATION": [True],
+    "COLLISION_OBSERVATION": True,
+    "LOCATION_OBSERVATION": True,
+    "RADAR_OBSERVATION": True,
+    "IMU_OBSERVATION": True,
+    "LANE_OBSERVATION": True,
+    "GNSS_OBSERVATION": True,
+    "BIRDVIEW_OBSERVATION": False,
 }
 
 EXPERIMENT_CONFIG = {
@@ -74,38 +86,38 @@ class Experiment(BaseExperiment):
         )
         self.observation_space = image_space
 
-    def process_observation(self, core, observation):
-        """
-        Process observations according to your experiment
-        :param core:
-        :param observation:
-        :return:
-        """
-        self.set_server_view(core)
-        image = post_process_image(observation['birdview'],
-                                   normalized = False,
-                                   grayscale = False
-        )
+    # def process_observation(self, core, observation):
+    #     """
+    #     Process observations according to your experiment
+    #     :param core:
+    #     :param observation:
+    #     :return:
+    #     """
+        # self.set_server_view(core)
+        # image = post_process_image(observation['birdview'],
+        #                            normalized = False,
+        #                            grayscale = False
+        # )
 
-        if self.prev_image_0 is None:
-            self.prev_image_0 = image
-            self.prev_image_1 = self.prev_image_0
-            self.prev_image_2 = self.prev_image_1
+        # if self.prev_image_0 is None:
+        #     self.prev_image_0 = image
+        #     self.prev_image_1 = self.prev_image_0
+        #     self.prev_image_2 = self.prev_image_1
 
-        images = image
+        # images = image
 
-        if self.frame_stack >= 2:
-            images = np.concatenate([self.prev_image_0, images], axis=2)
-        if self.frame_stack >= 3 and images is not None:
-            images = np.concatenate([self.prev_image_1, images], axis=2)
-        if self.frame_stack >= 4 and images is not None:
-            images = np.concatenate([self.prev_image_2, images], axis=2)
+        # if self.frame_stack >= 2:
+        #     images = np.concatenate([self.prev_image_0, images], axis=2)
+        # if self.frame_stack >= 3 and images is not None:
+        #     images = np.concatenate([self.prev_image_1, images], axis=2)
+        # if self.frame_stack >= 4 and images is not None:
+        #     images = np.concatenate([self.prev_image_2, images], axis=2)
 
-        self.prev_image_2 = self.prev_image_1
-        self.prev_image_1 = self.prev_image_0
-        self.prev_image_0 = image
+        # self.prev_image_2 = self.prev_image_1
+        # self.prev_image_1 = self.prev_image_0
+        # self.prev_image_0 = image
 
-        return images
+        # return images
 
     def inside_lane(self, map):
         self.current_w = map.get_waypoint(self.hero.get_location(), lane_type=carla.LaneType.Any)

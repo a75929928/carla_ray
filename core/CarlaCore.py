@@ -278,6 +278,7 @@ class CarlaCore:
                 sensor = experiment_config["SENSOR_CONFIG"]["SENSOR"][i].value
                 transform_index = experiment_config["SENSOR_CONFIG"]["SENSOR_TRANSFORM"][i].value
                 self.camera_manager.set_sensor(sensor, transform_index, synchronous_mode=synchronous_mode)
+                self.camera_manager.set_rendering(True) # to render the front view
 
         if experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:
             self.collision_sensor = CollisionSensor(

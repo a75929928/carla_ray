@@ -63,10 +63,10 @@ if __name__ == '__main__':
     env_config = {
         "RAY": False,  # Are we running an experiment in Ray
         "DEBUG_MODE": False,
-        "Experiment": "experiment2",
+        "Experiment": "experiment_test",
     }
     
     env = CarlaEnv(env_config)
     env.reset()
     while 1:
-        observation, reward, done, info = env.step(1)
+        observation, reward, done, info = env.step(0) # stay to observe

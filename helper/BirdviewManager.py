@@ -655,9 +655,12 @@ class BirdviewSensor(object):
         # Get the surface into a numpy array
         array3d = pygame.surfarray.array3d(self.final_surface)
 
-        # from pygame.examples.arraydemo import surfdemo_show
-        # surfdemo_show(array3d, 'array3d')
-        
+        # Display the birdview
+        screen = pygame.display.set_mode(array3d.shape[:2], 0, 32)
+        pygame.surfarray.blit_array(screen, array3d)
+        pygame.display.flip()
+        pygame.display.set_caption('array3d')
+
         array3d = array3d.swapaxes(0, 1)
 
         return array3d
