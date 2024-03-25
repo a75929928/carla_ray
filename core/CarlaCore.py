@@ -136,7 +136,8 @@ class CarlaCore:
         server_process = subprocess.Popen(
             server_command_text,
             shell=True,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+            # preexec_fn=os.setsid,
+            stdout=open(os.devnull, "w"),
         )
 
     # ==============================================================================

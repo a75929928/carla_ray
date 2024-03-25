@@ -121,9 +121,14 @@ class LaneInvasionSensor(object):
             self.sensor = None
 
     def get_lane_data(self):
+        '''
+            All lane type:
+                NONE Other Broken Solid SolidSolid SolidBroken 
+                BrokenSolid BrokenBroken BottsDots Grass Curb 
+        '''
+        # TODO add judgement about SolidBroken in Overtaking event
         for x in self.lane_markings:
-            #if x in ['Solid','SolidSolid','Curb','Grass', 'NONE', 'Broken']:
-            if x in ['Curb','Grass']:
+            if x in ['Curb','Grass', 'Solid', 'SolidSolid']:
                 return True
         else:
             return False
@@ -282,10 +287,11 @@ class RadarSensor(object):
             return self.get_radar_data()
         else:
             try:
-                RadarSensor._Radar_callback(weak_self, self.radar_queue.get(False))
+                res = RadarSensor._Radar_callback(weak_self, self.radar_queue.get(False))
             except:
                 pass
-
+        return res
+    
     @staticmethod
     def _Radar_callback(weak_self, radar_data):
         self = weak_self()

@@ -1,5 +1,6 @@
 """
-This is a sample carla environment. It does basic functionality.
+This is a sample carla environment. 
+Only change env import
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -8,7 +9,7 @@ from __future__ import print_function
 import gym
 # from gym.utils import seeding
 
-from core.CarlaCore import CarlaCore
+from core.CarlaCore_multi import CarlaCore
 import time
 
 
@@ -34,51 +35,54 @@ class CarlaEnv(gym.Env):
         self.core.reset_sensors(self.experiment_config)
 
         # autopilot means to use Carla Expert but here is just decoration XD
-        self.experiment.spawn_hero(self.world, self.experiment.start_location, autopilot=self.experiment_config["Autodrive_enabled"]) 
+        self.experiment.spawn_hero(self.world, self.experiment.start_location, autopilot=self.experiment_config["Autodrive_enabled"], core=self.core) 
         self.core.setup_sensors(
             self.experiment.experiment_config,
             self.experiment.get_hero(),
             self.world.get_settings().synchronous_mode,
         )
 
-        # add params to monitor training
-        self.episode_start = time.time()
-        self.steering_lock = False
-        self.steering_lock_start = None # this is to count time in steering lock and start penalising for long time in steering lock
-        self.step_counter = 0
-        self.initial_location = self.experiment.hero.get_location()
+        self.initial_location = self.experiment.get_hero_location()
 
         self.experiment.initialize_reward(self.core)
         self.experiment.set_server_view(self.core)
         self.experiment.experiment_tick(self.core, self.world, action=None)
         obs, info = self.experiment.get_observation(self.core)
-        # obs = self.experiment.process_observation(self.core, obs)
+        obs = self.experiment.process_observation(self.core, obs)
         return obs
 
     def step(self, action):
         # assert action in [0, 13], action
         self.experiment.experiment_tick(self.core, self.world, action)
         observation, info = self.experiment.get_observation(self.core)
-        # observation = self.experiment.process_observation(self.core, observation)
-        reward = self.experiment.compute_reward(self.core,observation, self.map)
+        # Observation is consisted of multiple sensor data including Collision/laneInvasion/Location
+        processed_observation = self.experiment.process_observation(self.core, observation)
+        reward = self.experiment.compute_reward(self.core, observation, self.map)
         done = self.experiment.get_done_status()
-        return observation, reward, done, info
+        return processed_observation, reward, done, info
 
 #    def seed(self, seed=None):
 #        self.np_random, seed = seeding.np_random(seed)
 #        return [seed]
 
+import random
 if __name__ == '__main__':
     
     env_config = {
         "RAY": False,  # Are we running an experiment in Ray
         "DEBUG_MODE": False,
-        "Experiment": "experiment_camera_rgb",
+        "Experiment": "experiment_birdview_multi",
     }
     
     env = CarlaEnv(env_config)
     env.reset()
     while 1:
-        # hero = env.experiment.hero.id
-        observation, reward, done, info = env.step(0) # stay still to observe
-        # surrounding_vehicles = env.core.get_nearby_vehicles(env.experiment.get_hero(), max_distance=200)
+        heroes = env.experiment.get_hero()
+        action_coast = {}
+        for hero_id in heroes:
+            action_coast.update({hero_id: 0})
+        observation, reward, done, info = env.step(action_coast) # stay still to observe
+        
+        # random_hero_id = random.choice(list(heroes))
+        # random_hero = heroes[random_hero_id]
+        # surrounding_vehicles = env.core.get_nearby_vehicles(random_hero_id, random_hero, max_distance=200)

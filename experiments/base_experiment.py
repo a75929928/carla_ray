@@ -7,10 +7,16 @@ from gym.spaces import Discrete
 from helper.CarlaHelper import post_process_image
 import time
 
+# add route planning
+import sys
+sys.path.append('D:\Code\CARLA_0.9.15\PythonAPI\carla') # tweak to where you put carla
+from agents.navigation.global_route_planner import GlobalRoutePlanner
+
+
 class SensorsTransformEnum(Enum):
     Transform_A = 0  # (carla.Transform(carla.Location(x=-5.5, z=2.5), carla.Rotation(pitch=8.0)), Attachment.SpringArm)
     Transform_B = 1  # (carla.Transform(carla.Location(x=1.6, z=1.7)), Attachment.Rigid),
-    Transform_c = 2  # (carla.Transform(carla.Location(x=5.5, y=1.5, z=1.5)), Attachment.SpringArm),
+    Transform_C = 2  # (carla.Transform(carla.Location(x=5.5, y=1.5, z=1.5)), Attachment.SpringArm),
     Transform_D = 3  # (carla.Transform(carla.Location(x=-8.0, z=6.0), carla.Rotation(pitch=6.0)), Attachment.SpringArm)
     Transform_E = 4  # (carla.Transform(carla.Location(x=-1, y=-bound_y, z=0.5)), Attachment.Rigid)]
 
@@ -19,12 +25,13 @@ class SensorsEnum(Enum):
     CAMERA_RGB = 0
     CAMERA_DEPTH_RAW = 1
     CAMERA_DEPTH_GRAY = 2
-    CAMERA_DEPTH_LOG = 3
-    CAMERA_SEMANTIC_RAW = 4
-    CAMERA_SEMANTIC_CITYSCAPE = 5
-    LIDAR = 6
-    CAMERA_DYNAMIC_VISION = 7
-    CAMERA_DISTORTED = 8
+    CAMERA_DEPTH_LOG = 3 # Only outline
+    CAMERA_SEMANTIC_RAW = 4 # Just RGB
+    CAMERA_SEMANTIC_CITYSCAPE = 5 # Real Semantic
+    LIDAR = 6 # No image 
+    CAMERA_DYNAMIC_VISION = 7 # only reveal dynamic things
+    # refer to https://carla.readthedocs.io/en/0.9.15/ref_sensors/#dvs-camera
+    CAMERA_DISTORTED = 8 # add noise based on rgb camera
 
 
 BASE_SERVER_VIEW_CONFIG = {
@@ -48,7 +55,8 @@ BASE_SENSOR_CONFIG = {
 BASE_BIRDVIEW_CONFIG = {
     "SIZE": 300,
     "RADIUS": 20,
-    "FRAMESTACK": 4
+    "FRAMESTACK": 4,
+    "RENDER": False
 }
 
 BASE_OBSERVATION_CONFIG = {
@@ -76,8 +84,12 @@ BASE_EXPERIMENT_CONFIG = {
     "Weather": carla.WeatherParameters.ClearNoon,
     "DISCRETE_ACTION": True,
     "Debug": False,
+
+    "synchronous": True, # default set synchronous mode to True
+    "Autodrive_enabled": False, # TODO to achieve it with Carla Expert for observation
 }
 
+# Organized as [throttle, steer, brake, reverse, hand_brake]
 DISCRETE_ACTIONS_SMALL = {
     0: [0.0, 0.00, 1.0, False, False],  # Apply Break
     1: [1.0, 0.00, 0.0, False, False],  # Straight
@@ -93,6 +105,7 @@ DISCRETE_ACTIONS_SMALL = {
     11: [0.0, -0.23, 1.0, False, False],  # Left+Stop
     12: [0.0, 0.23, 1.0, False, False],  # Right+Stop
     13: [0.0, 0.70, 1.0, False, False],  # Right+Stop
+    14: [0.0, 0.00, 0.0, False, False],  # Coast
 }
 
 # DISCRETE_ACTIONS_SMALLER = {
@@ -142,17 +155,20 @@ class BaseExperiment:
         self.spawn_point_list = []
         self.vehicle_list = []
         self.start_location = None
-        self.end_location = None
+        # self.end_location = None
         self.current_w = None
         self.hero_model = ''.join(self.experiment_config["hero_vehicle_model"])
         self.set_observation_space()
         self.set_action_space()
-        self.max_idle = 40 #seconds
-        self.max_ep_time = 120 #seconds
+        self.max_idle = 40 # seconds
+        self.max_ep_time = 120 # seconds
         self.timer_idle = CustomTimer()
         self.timer_ep = CustomTimer()
         self.t_idle_start = None
         self.t_ep_start = None
+
+        self.route = None
+        self.speed_limit = 30 # kmh
 
 
     def get_experiment_config(self):
@@ -222,17 +238,25 @@ class BaseExperiment:
         return 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2)
 
     def get_done_status(self):
-        #done = self.observation["collision"] is not False or not self.check_lane_type(map)
-        done_idle = False
+        done_collision = self.observation["collision"]
+        # done = self.observation["collision"] or not self.check_lane_type(map)
+        
+        # Done when keep low speed for a long time
         if self.get_speed() < 4.0:
             idle_time = self.timer_idle.time()
-            done_idle = self.max_idle < (idle_time - self.t_idle_start)
+            done_idle = (idle_time - self.t_idle_start) > self.max_idle
         else:
+            done_idle = False
             self.t_idle_start = self.timer_idle.time()
+        
+        # Done when total time is too long
         ep_time = self.timer_ep.time()
-        done_max_time = self.max_ep_time < (ep_time - self.t_ep_start)
-        done_falling = self.hero.get_location().z < -0.5
-        return done_idle or done_max_time or done_falling
+        done_max_time = (ep_time - self.t_ep_start) > self.max_ep_time
+
+        # Done when fall out the world
+        done_falling = self.hero.get_location().z < -0.5 
+        
+        return done_collision or done_idle or done_max_time or done_falling
 
     def process_observation(self, core, observation):
 
@@ -253,31 +277,33 @@ class BaseExperiment:
     def get_observation(self, core):
 
         info = {}
+        obs = self.observation
 
         if len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"]) != len(self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]):
             raise Exception("You need to specify the CAMERA_OBSERVATION for each sensor.")
         
-        # for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
-        #     if self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
-        #         # np.concatenate(self.observation['camera'], core.get_camera_data())
-        #         self.observation['camera'].append(core.get_camera_data())
+        for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
+            if self.experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
+                # np.concatenate(obs['camera'], core.get_camera_data())
+                obs['camera'].append(core.get_camera_data())
 
-        self.observation['camera'] = core.get_camera_data()
+        # obs['camera'] = core.get_camera_data()
                 
         if self.experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:
-            self.observation["collision"] = core.get_collision_data()
+            obs["collision"] = core.get_collision_data()
         if self.experiment_config["OBSERVATION_CONFIG"]["LOCATION_OBSERVATION"]:
-            self.observation["location"] = self.hero.get_transform()
+            loc = self.hero.get_transform().location
+            obs["location"] = [loc.x, loc.y, loc.z]
         if self.experiment_config["OBSERVATION_CONFIG"]["LANE_OBSERVATION"]:
-            self.observation["lane_invasion"] = core.get_lane_data()
+            obs["lane_invasion"] = core.get_lane_data()
         if self.experiment_config["OBSERVATION_CONFIG"]["GNSS_OBSERVATION"]:
-            self.observation["gnss"] = core.get_gnss_data()
+            obs["gnss"] = core.get_gnss_data()
         if self.experiment_config["OBSERVATION_CONFIG"]["IMU_OBSERVATION"]:
-            self.observation["imu"] = core.get_imu_data()
+            obs["imu"] = core.get_imu_data()
         if self.experiment_config["OBSERVATION_CONFIG"]["RADAR_OBSERVATION"]:
-            self.observation["radar"] = core.get_radar_data()
+            obs["radar"] = core.get_radar_data()
         if self.experiment_config["OBSERVATION_CONFIG"]["BIRDVIEW_OBSERVATION"]:
-            self.observation["birdview"] = core.get_birdview_data()
+            obs["birdview"] = core.get_birdview_data()
 
         info["control"] = {
             "steer": self.action.steer,
@@ -287,7 +313,20 @@ class BaseExperiment:
             "hand_brake": self.action.hand_brake,
         }
 
-        return self.observation, info
+        # Add observation about navigation waypoint
+        angle, distance = None, None
+        while angle is None:
+            try:
+                # connect
+                angle, distance = self.get_closest_wp_forward()
+            except:
+                pass
+
+        obs["waypoint_angle"] = angle
+        obs["waypoint_distance"] = distance
+        self.past_distance_to_route = distance
+
+        return obs, info
 
     def update_measurements(self, core):
 
@@ -305,19 +344,28 @@ class BaseExperiment:
 
     def update_actions(self, action, hero):
         if action is None:
-            self.action = carla.VehicleControl()
+            self.action = carla.VehicleControl() # default：do nothing 
         else:
             action = DISCRETE_ACTIONS[int(action)]
+
+            # self.action.throttle = float(np.clip(self.past_action.throttle + action[0], 0, 0.5))
+            # self.action.steer = float(np.clip(self.past_action.steer + action[1], -0.7, 0.7))
+
+            self.action.throttle = float(np.clip(action[0], 0, 0.5))
+            self.action.steer = float(np.clip(action[1], -0.7, 0.7))
             self.action.brake = float(np.clip(action[2], 0, 1))
-            if action[2] != 0.0:
-                self.action.throttle = float(0)
-            else:
-                self.action.throttle = float(np.clip(self.past_action.throttle + action[0], 0, 0.5))
-            self.action.steer = float(np.clip(self.past_action.steer + action[1], -0.7, 0.7))
+            
+            # Throttle when brake result in nothing
+            # if self.action.brake:
+            #     self.action.throttle = float(0)
+            # else:
+            #     self.action.throttle = float(np.clip(self.past_action.throttle + action[0], 0, 0.5))
+
             self.action.reverse = action[3]
             self.action.hand_brake = action[4]
             self.past_action = self.action
-            self.hero.apply_control(self.action)
+        
+        hero.apply_control(self.action)
 
     def compute_reward(self, core, observation):
 
@@ -349,7 +397,7 @@ class BaseExperiment:
         """
         This function spawns the hero vehicle. It makes sure that if a hero exists, it destroys the hero and respawn
         :param core:
-        :param transform: Hero location
+        :param transform: Hero start location
         :param autopilot: Autopilot Status
         :return:
         """
@@ -359,7 +407,7 @@ class BaseExperiment:
         self.hero_blueprints = world.get_blueprint_library().find(self.hero_model)
         self.hero_blueprints.set_attribute("role_name", "hero")
 
-        self.end_location = self.spawn_points[self.experiment_config["end_pos_spawn_id"]]
+        # self.end_location = self.spawn_points[self.experiment_config["end_pos_spawn_id"]]
 
         if self.hero is not None:
             self.hero.destroy()
@@ -367,6 +415,7 @@ class BaseExperiment:
 
         i = 0
         random.shuffle(self.spawn_points, random.random)
+        # Keep finding spawn point until hero successfully spawned
         while True:
             next_spawn_point = self.spawn_points[i % len(self.spawn_points)]
             self.hero = world.try_spawn_actor(self.hero_blueprints, next_spawn_point)
@@ -378,7 +427,10 @@ class BaseExperiment:
 
         world.tick()
         print("Hero spawned!")
+
+        # initialize params
         self.start_location = self.spawn_points[i].location
+        self.route = self.select_random_route(world)
         self.past_action = carla.VehicleControl(0.0, 0.00, 0.0, False, False)
         self.t_idle_start = self.timer_idle.time()
         self.t_ep_start = self.timer_ep.time()
@@ -408,3 +460,72 @@ class BaseExperiment:
         self.update_measurements(core)
         self.update_actions(action, self.hero)
 
+    
+    def select_random_route(self, world):
+        '''
+        retruns a random route for the car/veh
+        out of the list of possible locations locs
+        where distance is longer than 100 waypoints
+        '''  
+        hero = self.hero  
+        point_a = hero.get_transform().location #we start at where the car is or last waypoint
+        sampling_resolution = 1
+        grp = GlobalRoutePlanner(world.get_map(), sampling_resolution)
+        # now let' pick the longest possible route
+        min_distance = 100
+        result_route = None
+        route_list = []
+        for loc in world.get_map().get_spawn_points(): # we start trying all spawn points 
+                                                            #but we just exclude first at zero index
+            cur_route = grp.trace_route(point_a, loc.location)
+            if len(cur_route) > min_distance:
+                route_list.append(cur_route)
+        result_route = random.choice(route_list)
+        return result_route
+    
+    def get_closest_wp_forward(self):
+        '''
+        this function is to find the closest point looking forward
+        if there in no points behind, then we get first available
+        '''
+
+        # first we create a list of angles and distances to each waypoint
+        # yeah - maybe a bit wastefull
+        hero = self.hero
+        points_ahead = []
+        points_behind = []
+        for i, wp in enumerate(self.route):
+            #get angle
+            vehicle_transform = hero.get_transform()
+            wp_transform = wp[0].transform
+            distance = ((wp_transform.location.y - vehicle_transform.location.y)**2 + (wp_transform.location.x - vehicle_transform.location.x)**2)**0.5
+            angle = math.degrees(math.atan2(wp_transform.location.y - vehicle_transform.location.y,
+                                wp_transform.location.x - vehicle_transform.location.x)) -  vehicle_transform.rotation.yaw
+            if angle>360:
+                angle = angle - 360
+            elif angle <-360:
+                angle = angle + 360
+
+            if angle>180:
+                angle = -360 + angle
+            elif angle <-180:
+                angle = 360 - angle 
+            if abs(angle)<=90:
+                points_ahead.append([i,distance,angle])
+            else:
+                points_behind.append([i,distance,angle])
+        # now we pick a point we need to get angle to 
+        if len(points_ahead)== 0:
+            closest = min(points_behind, key=lambda x: x[1])
+            if closest[2]>0:
+                closest = [closest[0],closest[1],90]
+            else:
+                closest = [closest[0],closest[1],-90] 
+        else:
+            closest = min(points_ahead, key=lambda x: x[1])
+            # move forward if too close
+            for i, point in enumerate(points_ahead):
+                if point[1]>=10 and point[1]<20:
+                    closest = point
+                    break
+            return closest[2]/90.0, closest[1] # we convert angle to [-1 to +1] and also return distance

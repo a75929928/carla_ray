@@ -483,6 +483,8 @@ class BirdviewSensor(object):
         self.town_map = self.world.get_map()
         self.radius = radius
 
+        self._render = False
+
         self.hero_transform = hero.get_transform()
         self.pixels_per_meter = size / (2* self.radius)
         self.map_image = MapImage(self.world, self.town_map, self.pixels_per_meter)
@@ -498,6 +500,9 @@ class BirdviewSensor(object):
         # Create the 'egocentric' surface
         self.hero_surface = pygame.Surface((size, size))  # translation
         self.final_surface = pygame.Surface((size, size))  # rotation
+
+    def set_rendering(self, render_state):
+        self._render = render_state
 
     def _split_actors(self):
         """Splits the retrieved actors by type id"""
@@ -655,11 +660,12 @@ class BirdviewSensor(object):
         # Get the surface into a numpy array
         array3d = pygame.surfarray.array3d(self.final_surface)
 
-        # Display the birdview
-        screen = pygame.display.set_mode(array3d.shape[:2], 0, 32)
-        pygame.surfarray.blit_array(screen, array3d)
-        pygame.display.flip()
-        pygame.display.set_caption('array3d')
+        # Display the birdview 
+        if self._render:
+            screen = pygame.display.set_mode(array3d.shape[:2], 0, 32)
+            pygame.surfarray.blit_array(screen, array3d)
+            pygame.display.flip()
+            pygame.display.set_caption('array3d')
 
         array3d = array3d.swapaxes(0, 1)
 
@@ -685,12 +691,14 @@ class BirdviewManager(object):
     version of CARLA's non rendering mode.
     """
 
-    def __init__(self, world, size, radius, parent_actor, synchronous_mode=True, timeout=2.0):
+    def __init__(self, world, size, radius, parent_actor, synchronous_mode=True, timeout=2.0, render=False):
         pygame.init()
         self.world = world
         self.synchronous_mode = synchronous_mode
         self.timeout = timeout
         self.running = False  # Flag to stop the execution of the sensor
+
+        self.render = render
 
         # Data given by the sensor
         if not self.synchronous_mode:

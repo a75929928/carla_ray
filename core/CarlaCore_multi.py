@@ -57,19 +57,19 @@ class CarlaCore:
             self.core_config["timeout"],
             self.core_config["RETRIES_ON_ERROR"],
             self.experiment_config["Disable_Rendering_Mode"],
-            True,
+            self.experiment_config["synchronous"], 
             self.experiment_config["Weather"],
             self.experiment_config["server_map"]
         )
 
         self.set_map_dimensions()
-        self.camera_manager = None
-        self.collision_sensor = None
-        self.radar_sensor = None
-        self.imu_sensor = None
-        self.gnss_sensor = None
-        self.lane_sensor = None
-        self.birdview_sensor = None
+        self.camera_manager = {}
+        self.collision_sensor = {}
+        self.radar_sensor = {}
+        self.imu_sensor = {}
+        self.gnss_sensor = {}
+        self.lane_sensor = {}
+        self.birdview_sensor = {}
 
     # ==============================================================================
     # -- ServerSetup -----------------------------------------------------------
@@ -104,15 +104,15 @@ class CarlaCore:
         if self.environment_config["DEBUG_MODE"] is True:
             # Big Screen for Debugging
             for i in range(0,len(self.experiment_config["SENSOR_CONFIG"]["SENSOR"])):
-                self.experiment_config["SENSOR_CONFIG"]["CAMERA_X"][i] = 900
-                self.experiment_config["SENSOR_CONFIG"]["CAMERA_Y"][i] = 1200
+                self.experiment_config["SENSOR_CONFIG"]["CAMERA_X"] = 900
+                self.experiment_config["SENSOR_CONFIG"]["CAMERA_Y"] = 1200
             self.experiment_config["quality_level"] = "High"
 
         uses_server_port = is_used(self.server_port)
         uses_stream_port = is_used(self.server_port+1)
         while uses_server_port and uses_stream_port:
             if uses_server_port:
-                print("Is using the server port: " + self.server_port)
+                print("Is using the server port: " + str(self.server_port))
             if uses_stream_port:
                 print("Is using the streaming port: " + str(self.server_port+1))
             self.server_port += 2
@@ -136,8 +136,7 @@ class CarlaCore:
         server_process = subprocess.Popen(
             server_command_text,
             shell=True,
-            preexec_fn=os.setsid,
-            stdout=open(os.devnull, "w"),
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
         )
 
     # ==============================================================================
@@ -164,7 +163,7 @@ class CarlaCore:
             try:
                 carla_client = carla.Client(host, port)
                 carla_client.set_timeout(timeout)
-                carla_client.load_world(map_name = town, map_layers = carla.MapLayer.NONE)
+                carla_client.load_world(map_name = town, map_layers = carla.MapLayer.NONE) # Unload any other layers but road and agents
 
                 world = carla_client.get_world()
 
@@ -260,6 +259,11 @@ class CarlaCore:
     # ==============================================================================
 
     def setup_sensors(self, experiment_config, hero, synchronous_mode=True):
+        # add random visulization
+        for hero_id in hero:
+            self.setup_sensors_single(experiment_config, hero[hero_id], hero_id, synchronous_mode)
+
+    def setup_sensors_single(self, experiment_config, hero, hero_id, synchronous_mode=True):
         """
         This function sets up hero vehicle sensors
 
@@ -268,9 +272,10 @@ class CarlaCore:
         :param synchronous_mode: set to True for RL
         :return:
         """
+
         for i in range(0,len(experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"])):
             if experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
-                self.camera_manager = CameraManager(
+                self.camera_manager[hero_id] = CameraManager(
                     hero,
                     experiment_config["SENSOR_CONFIG"]["CAMERA_X"],
                     experiment_config["SENSOR_CONFIG"]["CAMERA_Y"],
@@ -278,32 +283,33 @@ class CarlaCore:
                 )
                 sensor = experiment_config["SENSOR_CONFIG"]["SENSOR"][i].value
                 transform_index = experiment_config["SENSOR_CONFIG"]["SENSOR_TRANSFORM"][i].value
-                self.camera_manager.set_sensor(sensor, transform_index, synchronous_mode=synchronous_mode)
+                self.camera_manager[hero_id].set_sensor(sensor, transform_index, synchronous_mode=synchronous_mode)
+                self.camera_manager[hero_id].set_rendering(True) # to render the front view
 
         if experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:
-            self.collision_sensor = CollisionSensor(
+            self.collision_sensor[hero_id] = CollisionSensor(
                 hero, synchronous_mode=False
             )
         if experiment_config["OBSERVATION_CONFIG"]["RADAR_OBSERVATION"]:
-            self.radar_sensor = RadarSensor(
+            self.radar_sensor[hero_id] = RadarSensor(
                 hero, synchronous_mode=synchronous_mode
             )
         if experiment_config["OBSERVATION_CONFIG"]["IMU_OBSERVATION"]:
-            self.imu_sensor = IMUSensor(
+            self.imu_sensor[hero_id] = IMUSensor(
                 hero, synchronous_mode=synchronous_mode
             )
         if experiment_config["OBSERVATION_CONFIG"]["LANE_OBSERVATION"]:
-            self.lane_sensor = LaneInvasionSensor(
+            self.lane_sensor[hero_id] = LaneInvasionSensor(
                 hero, synchronous_mode=synchronous_mode
             )
         if experiment_config["OBSERVATION_CONFIG"]["GNSS_OBSERVATION"]:
-            self.gnss_sensor = GnssSensor(
+            self.gnss_sensor[hero_id] = GnssSensor(
                 hero, synchronous_mode=synchronous_mode
             )
         if experiment_config["OBSERVATION_CONFIG"]["BIRDVIEW_OBSERVATION"]:
             size = experiment_config["BIRDVIEW_CONFIG"]["SIZE"]
             radius = experiment_config["BIRDVIEW_CONFIG"]["RADIUS"]
-            self.birdview_sensor = BirdviewManager(
+            self.birdview_sensor[hero_id] = BirdviewManager(
                 self.world, size, radius, hero, synchronous_mode=synchronous_mode
             )
 
@@ -315,101 +321,115 @@ class CarlaCore:
         """
         if experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]:
             if self.camera_manager is not None:
-                self.camera_manager.destroy_sensor()
+                for hero_id in self.camera_manager:
+                    self.camera_manager[hero_id].destroy_sensor()
         if experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:
             if self.collision_sensor is not None:
-                self.collision_sensor.destroy_sensor()
+                for hero_id in self.collision_sensor:
+                    self.collision_sensor[hero_id].destroy_sensor()
         if experiment_config["OBSERVATION_CONFIG"]["RADAR_OBSERVATION"]:
             if self.radar_sensor is not None:
-                self.radar_sensor.destroy_sensor()
+                for hero_id in self.radar_sensor:
+                    self.radar_sensor[hero_id].destroy_sensor()
         if experiment_config["OBSERVATION_CONFIG"]["IMU_OBSERVATION"]:
             if self.imu_sensor is not None:
-                self.imu_sensor.destroy_sensor()
+                for hero_id in self.imu_sensor:
+                    self.imu_sensor[hero_id].destroy_sensor()
         if experiment_config["OBSERVATION_CONFIG"]["LANE_OBSERVATION"]:
             if self.lane_sensor is not None:
-                self.lane_sensor.destroy_sensor()
+                for hero_id in self.lane_sensor:
+                    self.lane_sensor[hero_id].destroy_sensor()
         if experiment_config["OBSERVATION_CONFIG"]["GNSS_OBSERVATION"]:
             if self.gnss_sensor is not None:
-                self.gnss_sensor.destroy_sensor()
+                for hero_id in self.gnss_sensor:
+                    self.gnss_sensor[hero_id].destroy_sensor()
         if experiment_config["OBSERVATION_CONFIG"]["BIRDVIEW_OBSERVATION"]:
             if self.birdview_sensor is not None:
-                self.birdview_sensor.destroy_sensor()
+                for hero_id in self.birdview_sensor:
+                    self.birdview_sensor[hero_id].destroy_sensor()
 
     # ==============================================================================
     # -- CameraSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def record_camera(self, record_state):
-        self.camera_manager.set_recording(record_state)
+    def record_camera(self, record_state, hero_id):
+        self.camera_manager[hero_id].set_recording(record_state)
 
-    def render_camera_lidar(self, render_state):
-        self.camera_manager.set_rendering(render_state)
+    def render_camera_lidar(self, render_state, hero_id):
+        self.camera_manager[hero_id].set_rendering(render_state)
 
-    def update_camera(self):
-        self.camera_manager.read_image_queue()
+    def update_camera(self, hero):
+        for hero_id in hero:
+            self.camera_manager[hero_id].read_image_queue()
 
-    def get_camera_data(self):
-        return self.camera_manager.get_camera_data()
+    def get_camera_data(self, hero_id):
+        return self.camera_manager[hero_id].get_camera_data()
 
     # ==============================================================================
     # -- CollisionSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def update_collision(self):
-        self.collision_sensor.read_collision_queue()
+    def update_collision(self, hero):
+        for hero_id in hero:
+            self.collision_sensor[hero_id].read_collision_queue()
 
-    def get_collision_data(self):
-        return self.collision_sensor.get_collision_data()
+    def get_collision_data(self, hero_id):
+        return self.collision_sensor[hero_id].get_collision_data()
 
     # ==============================================================================
     # -- LaneInvasionSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def update_lane_invasion(self):
-        self.lane_sensor.read_lane_queue()
+    def update_lane_invasion(self, hero):
+        for hero_id in hero:
+            self.lane_sensor[hero_id].read_lane_queue()
 
-    def get_lane_data(self):
-        return self.lane_sensor.get_lane_data()
+    def get_lane_data(self, hero_id):
+        return self.lane_sensor[hero_id].get_lane_data()
 
     # ==============================================================================
     # -- GNSSSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def update_gnss(self):
-        self.gnss_sensor.read_gnss_queue()
+    def update_gnss(self, hero):
+        for hero_id in hero:
+            self.gnss_sensor[hero_id].read_gnss_queue()
 
-    def get_gnss_data(self):
-        return self.gnss_sensor.get_gnss_data()
+    def get_gnss_data(self, hero_id):
+        return self.gnss_sensor[hero_id].get_gnss_data()
 
     # ==============================================================================
     # -- IMUSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def update_imu_invasion(self):
-        self.imu_sensor.read_imu_queue()
+    def update_imu_invasion(self, hero):
+        for hero_id in hero:
+            self.imu_sensor[hero_id].read_imu_queue()
 
-    def get_imu_data(self):
-        return self.imu_sensor.get_imu_data()
+    def get_imu_data(self, hero_id):
+        return self.imu_sensor[hero_id].get_imu_data()
 
     # ==============================================================================
     # -- RadarSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def update_radar_invasion(self):
-        self.radar_sensor.read_radar_queue()
+    def update_radar_invasion(self, hero):
+        for hero_id in hero:
+            self.radar_sensor[hero_id].read_radar_queue()
 
-    def get_radar_data(self):
-        return self.radar_sensor.get_radar_data()
+    def get_radar_data(self, hero_id):
+        return self.radar_sensor[hero_id].get_radar_data()
 
     # ==============================================================================
     # -- BirdViewSensor -----------------------------------------------------------
     # ==============================================================================
 
-    def update_birdview(self):
-        self.birdview_sensor.read_birdview_queue()
+    def update_birdview(self, hero):
+        for hero_id in hero:
+            self.birdview_sensor[hero_id].read_birdview_queue()
 
-    def get_birdview_data(self):
-        return self.birdview_sensor.get_birdview_data()
+    def get_birdview_data(self, hero_id):
+        return self.birdview_sensor[hero_id].get_birdview_data()
 
     # ==============================================================================
     # -- OtherForNow -----------------------------------------------------------
@@ -421,34 +441,48 @@ class CarlaCore:
     def get_core_client(self):
         return self.client
 
-    def get_nearby_vehicles(self, world, hero_actor, max_distance=200):
-        vehicles = world.get_actors().filter("vehicle.*")
+    def get_nearby_vehicles(self, hero_id, hero, max_distance=200, filter=['autopilot']):
+        vehicles = self.world.get_actors().filter("vehicle.*")
         surrounding_vehicles = []
-        surrounding_vehicle_actors = []
         _info_text = []
         if len(vehicles) > 1:
             _info_text += ["Nearby vehicles:"]
-            for x in vehicles:
-                if x.id != hero_actor:
-                    loc1 = hero_actor.get_location()
-                    loc2 = x.get_location()
+            for vehicle in vehicles:
+                vehicle_role_name = vehicle.attributes['role_name']
+                # Pass hero itself and redundant characters
+                if vehicle.id == hero_id or vehicle_role_name not in filter:
+                    pass
+                else:
+                    loc_h = hero.get_location()
+                    loc_v = vehicle.get_location()
                     distance = math.sqrt(
-                        (loc1.x - loc2.x) ** 2
-                        + (loc1.y - loc2.y) ** 2
-                        + (loc1.z - loc2.z) ** 2
+                        (loc_h.x - loc_v.x) ** 2
+                        + (loc_h.y - loc_v.y) ** 2
+                        + (loc_h.z - loc_v.z) ** 2
                     )
-                    vehicle = {}
+                    vel = vehicle.get_velocity()
+                    ctrl = vehicle.get_control()
+                    vehicle_attributes = {}
                     if distance < max_distance:
-                        vehicle["vehicle_type"] = get_actor_display_name(x, truncate=22)
-                        vehicle["vehicle_location"] = x.get_location()
-                        vehicle["vehicle_velocity"] = x.get_velocity()
-                        vehicle["vehicle_distance"] = distance
-                        surrounding_vehicles.append(vehicle)
-                        surrounding_vehicle_actors.append(x)
+                        vehicle_attributes["id"] = vehicle.id
+                        # vehicle_attributes["type"] = get_actor_display_name(vehicle, truncate=22)
+                        vehicle_attributes["location"] = [loc_v.x, loc_v.y] # ignore height
+                        vehicle_attributes["velocity"] = 3.6 * math.sqrt(vel.x ** 2 + vel.y ** 2 + vel.z ** 2) # kmh
+                        # vehicle_attributes["distance"] = distance
+                        vehicle_attributes["control"] = [ctrl.steer, ctrl.throttle, ctrl.brake, ctrl.reverse, ctrl.hand_brake]
+                        
+                        # Note: Vehicles controlled by TM never update their light states 
+                        # if vehicle.attributes["has_lights"]:
+                        #     vehicle_attributes["light_state"] = vehicle.get_light_state()
+     
+                        surrounding_vehicles.append(vehicle_attributes)
+
+        return surrounding_vehicles
 
     def spawn_npcs(self, n_vehicles, n_walkers, hybrid=False, seed=None):
         """
         Spawns vehicles and walkers, also setting up the Traffic Manager and its parameters
+        Copied from official code "generate_traffic.py"
 
         :param n_vehicles: Number of vehicles
         :param n_walkers: Number of walkers
@@ -462,14 +496,20 @@ class CarlaCore:
             print("Is using the TM port: " + str(tm_port))
             tm_port+=1
         traffic_manager = self.client.get_trafficmanager(tm_port)
+
+        self.tm_port = tm_port # add traffic manager port for hero spawn
+
         if hybrid:
             traffic_manager.set_hybrid_physics_mode(True)
         if seed is not None:
             traffic_manager.set_random_device_seed(seed)
         traffic_manager.set_synchronous_mode(True)
 
+        # self.traffic_manager = traffic_manager # take for action prediction
+
         blueprints = self.world.get_blueprint_library().filter("vehicle.*")
         blueprintsWalkers = self.world.get_blueprint_library().filter("walker.pedestrian.*")
+        # Search any 4-wheel vehicles but some special one
         blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
         blueprints = [x for x in blueprints if not x.id.endswith('isetta')]
         blueprints = [x for x in blueprints if not x.id.endswith('carlacola')]
@@ -479,9 +519,7 @@ class CarlaCore:
         spawn_points = self.world.get_map().get_spawn_points()
         number_of_spawn_points = len(spawn_points)
 
-        if n_vehicles < number_of_spawn_points:
-            random.shuffle(spawn_points)
-        elif n_vehicles > number_of_spawn_points:
+        if n_vehicles > number_of_spawn_points:
             msg = 'requested %d vehicles, but could only find %d spawn points'
             logging.warning(msg, n_vehicles, number_of_spawn_points)
             n_vehicles = number_of_spawn_points
@@ -495,6 +533,7 @@ class CarlaCore:
         batch = []
         vehicles_list = []
         all_id = []
+        random.shuffle(spawn_points)
         for n, transform in enumerate(spawn_points):
             if n >= n_vehicles:
                 break
@@ -510,7 +549,16 @@ class CarlaCore:
             # spawn the cars and set their autopilot and light state all together
             batch.append(SpawnActor(blueprint, transform)
                 .then(SetAutopilot(FutureActor, True, traffic_manager.get_port())))
-
+          
+        # ---- Debug ----
+        # Whether action getter would be influenced by wrong tm_port
+        # while True:
+        #     vehicle = self.world.try_spawn_actor(blueprint, transform)
+        #     if vehicle is not None:
+        #         vehicle.set_autopilot(True)
+        #         break
+        # action_possible = traffic_manager.get_next_action(vehicle)
+            
         for response in self.client.apply_batch_sync(batch, True):
             if response.error:
                 logging.error(response.error)
@@ -585,5 +633,7 @@ class CarlaCore:
             all_actors[i].go_to_location(self.world.get_random_location_from_navigation())
             # max speed
             all_actors[i].set_max_speed(float(walker_speed[int(i/2)]))
+            # To enable vehicle light update
+            traffic_manager.update_vehicle_lights(all_actors[i], True)
 
         self.world.tick()

@@ -13,9 +13,14 @@ SERVER_VIEW_CONFIG = {
 }
 
 SENSOR_CONFIG = {
-    "CAMERA_NORMALIZED": [True], # apparently doesnt work if set to false, its just for the image!
+    "SENSOR": [SensorsEnum.CAMERA_DISTORTED],
+    "SENSOR_TRANSFORM": [SensorsTransformEnum.Transform_C],
+    "CAMERA_X": 84,
+    "CAMERA_Y": 84,
+    "CAMERA_FOV": 60,
+    "CAMERA_NORMALIZED": [True],# apparently doesnt work if set to false, its just for the image!
     "CAMERA_GRAYSCALE": [True],
-    "FRAMESTACK": 4,
+    "FRAMESTACK": 1,
 }
 
 BIRDVIEW_CONFIG = {
@@ -26,9 +31,9 @@ BIRDVIEW_CONFIG = {
 }
 
 OBSERVATION_CONFIG = {
-    "CAMERA_OBSERVATION": [False],
+    "CAMERA_OBSERVATION": [True],
     # "RADAR_OBSERVATION": True, # TODO fix Radar
-    "BIRDVIEW_OBSERVATION": True,
+    # "BIRDVIEW_OBSERVATION": True,
 }
 
 EXPERIMENT_CONFIG = {
