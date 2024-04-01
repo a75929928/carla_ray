@@ -3,9 +3,11 @@ from enum import Enum
 import math
 import carla
 import numpy as np
-from gym.spaces import Discrete
+from gymnasium import spaces
+# from gym.spaces import Discrete
 from helper.CarlaHelper import post_process_image
 import time
+from typing import Union, Dict, AnyStr, Optional, Tuple
 
 # add route planning
 import sys
@@ -86,7 +88,7 @@ BASE_EXPERIMENT_CONFIG = {
     "hero_vehicle_model": "vehicle.lincoln.mkz_2017",
     "Weather": carla.WeatherParameters.ClearNoon,
     "DISCRETE_ACTION": True,
-    "Debug": False,
+    # "Debug": False,
 
     "synchronous": True, # default set synchronous mode to True
     # All heroes would be controlled by traffic agent
@@ -164,10 +166,6 @@ class BaseExperiment:
         self.t_ep_start = {}
 
         self.current_w = {}
-
-        # initialize
-        self.set_observation_space()
-        self.set_action_space()
         
         
     def get_experiment_config(self):
@@ -194,7 +192,8 @@ class BaseExperiment:
         """
         :return: None. In this experiment, it is a discrete space
         """
-        self.action_space = Discrete(len(DISCRETE_ACTIONS))
+        # self.action_space = spaces.Discrete(len(DISCRETE_ACTIONS))
+        return spaces.Discrete(len(DISCRETE_ACTIONS))
 
     def get_action_space(self):
 
@@ -242,9 +241,12 @@ class BaseExperiment:
 
     def get_done_status(self):
         done = {}
+        all_done = True
         for hero_id in self.hero:
             _done = self.get_done_status_single(hero_id)
-            done.update({hero_id: _done})
+            if _done == False: all_done = False
+            done.update({hero_id: _done}) # Don't stop env unless all agent is done
+        done.update({"__all__": all_done})
         return done
     
     def get_done_status_single(self, hero_id):
@@ -532,7 +534,7 @@ class BaseExperiment:
         i = 0
         random.shuffle(self.spawn_points, random.random)
         num_hero_exist = 0
-        server_port = core.tm_port
+        # server_port = core.tm_port
         # Keep finding spawn point until all self.hero are successfully spawned
         while num_hero_exist < num_hero:
             next_spawn_point = self.spawn_points[i % len(self.spawn_points)]
@@ -545,7 +547,7 @@ class BaseExperiment:
                 self.t_idle_start.update({hero.id: time.time()})
                 self.t_ep_start.update({hero.id: time.time()})
             else:
-                print("Could not spawn Hero, changing spawn point")
+                # print("Could not spawn Hero, changing spawn point")
                 i+=1
             num_hero_exist = len(self.hero)
 
@@ -564,7 +566,7 @@ class BaseExperiment:
     # -- Tick -----------------------------------------------------------
     # ==============================================================================
 
-    def experiment_tick(self, core, world, action):
+    def experiment_tick(self, core, world, action_dict):
 
         """
         This is the "tick" logic.
@@ -575,7 +577,7 @@ class BaseExperiment:
 
         world.tick()
         self.update_measurements(core)
-        self.update_actions(action)
+        self.update_actions(action_dict)
 
     
     def select_random_route(self, world, hero_id):
@@ -656,3 +658,7 @@ class BaseExperiment:
             _loc = self.hero[hero_id].get_location()
             loc.update({hero_id: _loc})
         return loc
+    
+    # add func to align with gymnasium API
+    def render(self, mode='human', text: Optional[Union[dict, str]] = None, *args, **kwargs) -> Optional[np.ndarray]:
+        pass

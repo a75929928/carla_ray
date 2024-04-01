@@ -3,7 +3,7 @@ import os
 import pickle
 
 import numpy as np
-from copo.train.utils import initialize_ray
+from utils import initialize_ray
 from ray import tune
 from ray.tune import CLIReporter
 

@@ -2,7 +2,8 @@ from experiments.base_experiment_multi import *
 from helper.CarlaHelper import spawn_vehicle_at, post_process_image, update_config
 import random
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
+# from gym import spaces
 from itertools import cycle
 import cv2
 import time
@@ -41,17 +42,15 @@ EXPERIMENT_CONFIG = {
     "OBSERVATION_CONFIG": OBSERVATION_CONFIG,
     "Server_View": SERVER_VIEW_CONFIG,
     "SENSOR_CONFIG": SENSOR_CONFIG,
-    # "server_map": "Town10HD",
     "server_map": "Town10HD_Opt", # layerd map - could remove buildings and trees to avoid disturbance
     "BIRDVIEW_CONFIG": BIRDVIEW_CONFIG,
-    "n_vehicles": 20,
+    # "n_vehicles": 20,
     # "n_walkers": 15,
     # "hero_vehicle_model": "vehicle.tesla.model3", # catalogue find https://carla.readthedocs.io/en/0.9.15/catalogue_vehicles/
     "hero_vehicle_model": "vehicle.lincoln.mkz_2017",
 
     "Disable_Rendering_Mode": False, # add to disable rendering
-    "is_multi_agent": True,
-    "n_heroes": 1,
+    "n_heroes": 5,
     # "Autodrive_enabled": True,
 }
 
@@ -59,6 +58,10 @@ class Experiment(BaseExperiment):
     def __init__(self):
         config=update_config(BASE_EXPERIMENT_CONFIG, EXPERIMENT_CONFIG)
         super().__init__(config)
+        
+        # initialize
+        self.set_observation_spaces()
+        self.set_action_spaces()
 
     def initialize_reward(self, core):
         """
@@ -73,6 +76,7 @@ class Experiment(BaseExperiment):
         self.prev_image_2 = {}
         self.allowed_types = [carla.LaneType.Driving, carla.LaneType.Parking]
 
+    # default: every agent share same observation space and action space
     def set_observation_space(self):
         birdview_size = self.experiment_config["BIRDVIEW_CONFIG"]["SIZE"]
         num_of_channels = 3
@@ -83,8 +87,27 @@ class Experiment(BaseExperiment):
             dtype=np.float32,
         )
         angle_space = spaces.Box(low = -1.0,high = 1.0,shape = (1,),dtype=np.float32)
-        self.observation_space = spaces.Dict({"birdview": image_space})
+        # self.observation_space = spaces.Dict({"birdview": image_space})
         # self.observation_space = spaces.Dict({"birdview": image_space, "waypoint": angle_space})
+        return spaces.Dict({"birdview": image_space})
+        
+    # add to align with multi-agent env
+    def set_observation_spaces(self):
+        self.observation_space = dict()
+        if len(self.hero) == 0: pass
+        else:
+            for hero_id in self.hero:
+                # default: every agent share the same obs & act space
+                default_space = self.set_observation_space()
+                self.observation_space.update({hero_id: default_space})
+            # self.observation_space = spaces.Dict({"birdview": image_space, "waypoint": angle_space})
+            
+    def get_observation_spaces(self):
+
+        """
+        :return: observation space
+        """
+        return self.observation_space
 
     def process_observation(self, core, observation):
         processed_observation = {}
@@ -131,6 +154,26 @@ class Experiment(BaseExperiment):
                 # 'waypoint': np.array([observation["waypoint_angle"]], dtype=np.float32)
                 })
     
+    def set_action_spaces(self):
+
+        """
+        :return: None. In this experiment, it is a spaces.Discrete space
+        """
+        self.action_spaces = dict()
+        # self.action_spaces = spaces.Dict({})
+        if len(self.hero) == 0: pass
+        else:
+            for hero_id in self.hero:
+                action_space = self.set_action_space()
+                self.action_spaces.update({hero_id: action_space})
+            
+    def get_action_spaces(self):
+
+        """
+        :return: action_space. In this experiment, it is a discrete space
+        """
+        return self.action_spaces
+    
     def compute_reward_single(self, core, observation, map, hero_id):
         """
         Reward function
@@ -144,3 +187,10 @@ class Experiment(BaseExperiment):
         
         return reward
 
+    def spawn_hero(self, world, transform, autopilot=False, core=None):
+        
+        super().spawn_hero(world, transform, autopilot, core)
+
+        # Update dict of obs/act space when spawn hero
+        self.set_action_spaces()
+        self.set_observation_spaces()

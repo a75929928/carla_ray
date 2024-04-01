@@ -6,12 +6,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import gym
+import gymnasium as gym
+# import gym
 # from gym.utils import seeding
 
 from core.CarlaCore_multi import CarlaCore
 import time
 
+# add to align with gymnasium API
+from copy import copy
+from typing import Callable, Dict, List, Tuple, Optional, Union, Set, Type
 
 class CarlaEnv(gym.Env):
 
@@ -21,8 +25,10 @@ class CarlaEnv(gym.Env):
 
         module = __import__("experiments.{}".format(self.environment_config["Experiment"] ))
         exec("self.experiment = module.{}.Experiment()".format(self.environment_config["Experiment"]))
-        self.action_space = self.experiment.get_action_space()
-        self.observation_space = self.experiment.get_observation_space()
+        # Align with multi-agent env, space determination would be associated with new agent
+        # self.action_space = self.experiment.get_action_space()
+        # self.observation_space = self.experiment.get_observation_space()
+
         self.experiment_config = self.experiment.get_experiment_config()
 
         self.core = CarlaCore(self.environment_config, self.experiment_config)
@@ -31,7 +37,7 @@ class CarlaEnv(gym.Env):
         self.map = self.world.get_map()
         self.reset()
 
-    def reset(self):
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         self.core.reset_sensors(self.experiment_config)
 
         # autopilot means to use Carla Expert but here is just decoration XD
@@ -46,20 +52,24 @@ class CarlaEnv(gym.Env):
 
         self.experiment.initialize_reward(self.core)
         self.experiment.set_server_view(self.core)
-        self.experiment.experiment_tick(self.core, self.world, action=None)
+        self.experiment.experiment_tick(self.core, self.world, action_dict=None)
         obs, info = self.experiment.get_observation(self.core)
         obs = self.experiment.process_observation(self.core, obs)
-        return obs
+        return obs, info
 
-    def step(self, action):
-        # assert action in [0, 13], action
-        self.experiment.experiment_tick(self.core, self.world, action)
+    def step(self, action_dict):
+        # assert action_dict in [0, 13], action_dict
+        self.experiment.experiment_tick(self.core, self.world, action_dict)
         observation, info = self.experiment.get_observation(self.core)
         # Observation is consisted of multiple sensor data including Collision/laneInvasion/Location
         processed_observation = self.experiment.process_observation(self.core, observation)
         reward = self.experiment.compute_reward(self.core, observation, self.map)
-        done = self.experiment.get_done_status()
-        return processed_observation, reward, done, info
+        terminateds = self.experiment.get_done_status()
+        # Just add to align with new gymnasium API
+        truncateds = copy(terminateds)
+        for id in truncateds:
+            truncateds[id] = False
+        return processed_observation, reward, terminateds, truncateds, info
 
 #    def seed(self, seed=None):
 #        self.np_random, seed = seeding.np_random(seed)
@@ -68,11 +78,13 @@ class CarlaEnv(gym.Env):
 import random
 if __name__ == '__main__':
     
-    env_config = {
-        "RAY": False,  # Are we running an experiment in Ray
-        "DEBUG_MODE": False,
-        "Experiment": "experiment_birdview_multi",
-    }
+    env_config = dict(
+        RAY =  False,  # Are we running an experiment in Ray
+        DEBUG_MODE = False,
+        Experiment = "experiment_birdview_multi",
+
+        horizon = 300, # added for done judgement
+    )
     
     env = CarlaEnv(env_config)
     env.reset()
@@ -81,7 +93,7 @@ if __name__ == '__main__':
         action_coast = {}
         for hero_id in heroes:
             action_coast.update({hero_id: 0})
-        observation, reward, done, info = env.step(action_coast) # stay still to observe
+        observation, reward, terminateds, truncateds, info = env.step(action_coast) # stay still to observe
         
         # random_hero_id = random.choice(list(heroes))
         # random_hero = heroes[random_hero_id]

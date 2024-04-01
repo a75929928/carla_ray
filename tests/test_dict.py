@@ -5,4 +5,5 @@
 a = {'1': 2}
 b = a
 b.update({'1': 3})
-print(a,b)
+# print(a,b)
+print(len(a))
