@@ -10,7 +10,7 @@ import gymnasium as gym
 # import gym
 # from gym.utils import seeding
 
-from core.CarlaCore_multi import CarlaCore
+from env.core.CarlaCore_multi import CarlaCore
 import time
 
 # add to align with gymnasium API

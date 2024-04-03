@@ -58,7 +58,7 @@ class CarlaCore:
             self.core_config["RETRIES_ON_ERROR"],
             self.experiment_config["Disable_Rendering_Mode"],
             self.experiment_config["synchronous"], 
-            self.experiment_config["Weather"],
+            getattr(carla.WeatherParameters, self.experiment_config["Weather"]),
             self.experiment_config["server_map"]
         )
 
@@ -196,7 +196,7 @@ class CarlaCore:
     def set_map_dimensions(self):
 
         """
-        From the spawn points, we get min and max and add some buffer so we can normalize the location of agents (0..1)
+        From the spawn points, we get min and max and add some buffer so we can normalize the location of agents (01)
         This allows you to get the location of the vehicle between 0 and 1
 
         :input
@@ -319,34 +319,63 @@ class CarlaCore:
         :param experiment_config: sensors configured in the experiment
         :return:
         """
-        if experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"]:
-            if self.camera_manager is not None:
-                for hero_id in self.camera_manager:
-                    self.camera_manager[hero_id].destroy_sensor()
-        if experiment_config["OBSERVATION_CONFIG"]["COLLISION_OBSERVATION"]:
+        _experiment_config = experiment_config["OBSERVATION_CONFIG"]
+
+        for i in range(0,len(_experiment_config["CAMERA_OBSERVATION"])):
+            if experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
+                self.camera_manager[hero_id].destroy_sensor()
+                break # camera destroys all views at one time
+
+        if _experiment_config["COLLISION_OBSERVATION"]:
             if self.collision_sensor is not None:
                 for hero_id in self.collision_sensor:
                     self.collision_sensor[hero_id].destroy_sensor()
-        if experiment_config["OBSERVATION_CONFIG"]["RADAR_OBSERVATION"]:
+        if _experiment_config["RADAR_OBSERVATION"]:
             if self.radar_sensor is not None:
                 for hero_id in self.radar_sensor:
                     self.radar_sensor[hero_id].destroy_sensor()
-        if experiment_config["OBSERVATION_CONFIG"]["IMU_OBSERVATION"]:
+        if _experiment_config["IMU_OBSERVATION"]:
             if self.imu_sensor is not None:
                 for hero_id in self.imu_sensor:
                     self.imu_sensor[hero_id].destroy_sensor()
-        if experiment_config["OBSERVATION_CONFIG"]["LANE_OBSERVATION"]:
+        if _experiment_config["LANE_OBSERVATION"]:
             if self.lane_sensor is not None:
                 for hero_id in self.lane_sensor:
                     self.lane_sensor[hero_id].destroy_sensor()
-        if experiment_config["OBSERVATION_CONFIG"]["GNSS_OBSERVATION"]:
+        if _experiment_config["GNSS_OBSERVATION"]:
             if self.gnss_sensor is not None:
                 for hero_id in self.gnss_sensor:
                     self.gnss_sensor[hero_id].destroy_sensor()
-        if experiment_config["OBSERVATION_CONFIG"]["BIRDVIEW_OBSERVATION"]:
+        if _experiment_config["BIRDVIEW_OBSERVATION"]:
             if self.birdview_sensor is not None:
                 for hero_id in self.birdview_sensor:
                     self.birdview_sensor[hero_id].destroy_sensor()
+
+    def destroy_sensors(self, experiment_config, hero_id):
+        """
+        Destroys sensors that were setup in this class
+        :param experiment_config: sensors configured in the experiment
+        :return:
+        """
+        _experiment_config = experiment_config["OBSERVATION_CONFIG"]
+        for i in range(0,len(_experiment_config["CAMERA_OBSERVATION"])):
+            if experiment_config["OBSERVATION_CONFIG"]["CAMERA_OBSERVATION"][i]:
+                self.camera_manager[hero_id].destroy_sensor()
+                break # camera destroys all views at one time
+        if _experiment_config["COLLISION_OBSERVATION"]:
+            self.collision_sensor[hero_id].destroy_sensor()
+        if _experiment_config["RADAR_OBSERVATION"]:
+            self.radar_sensor[hero_id].destroy_sensor()
+        if _experiment_config["IMU_OBSERVATION"]:
+            self.imu_sensor[hero_id].destroy_sensor()
+        if _experiment_config["LANE_OBSERVATION"]:
+            self.lane_sensor[hero_id].destroy_sensor()
+        if _experiment_config["GNSS_OBSERVATION"]:
+            self.gnss_sensor[hero_id].destroy_sensor()
+        if _experiment_config["BIRDVIEW_OBSERVATION"]:
+            self.birdview_sensor[hero_id].destroy_sensor()
+        
+        print("Sensors of %s destroyed" %hero_id)
 
     # ==============================================================================
     # -- CameraSensor -----------------------------------------------------------
@@ -623,7 +652,7 @@ class CarlaCore:
         # wait for a tick to ensure client receives the last transform of the walkers we have just created
         self.world.tick()
 
-        # 5. initialize each controller and set target to walk to (list is [controler, actor, controller, actor ...])
+        # 5. initialize each controller and set target to walk to (list is [controler, actor, controller, actor .])
         # set how many pedestrians can cross the road
         self.world.set_pedestrians_cross_factor(percentagePedestriansCrossing)
         for i in range(0, len(all_id), 2):

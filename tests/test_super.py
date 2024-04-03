@@ -1,17 +1,19 @@
 class Parent:
     def __init__(self):
-        self.a = 1
-    def get_data(self, data):
-        print(data)
+        self.a = 999
+        self.reset()
+
+    def reset(self):
+        return NotImplementedError
 
 class Child(Parent):
-    def __init__(self):
-        super().__init__()
-        # self.b = 2
-    def get_data(self, data):
-        super().get_data(data)
-        # print(self.b)
+    # def __init__(self):
+    #     super().__init__()
+
+    def reset(self):
+        self.a = 1
+    
 
 if __name__ == '__main__':
     c = Child()
-    c.get_data(1)
+    print(c.a)
