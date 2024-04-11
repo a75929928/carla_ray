@@ -90,7 +90,8 @@ BASE_EXPERIMENT_CONFIG = {
     # TODO Take (obs, action) of background agents into consideration
     "Autodrive_enabled": False, 
 
-    "n_heroes": 1
+    "n_heroes": 1,
+    "allow_respawn": False,
 }
 
 # Organized as [throttle, steer, brake, reverse, hand_brake]

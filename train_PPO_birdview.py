@@ -64,11 +64,10 @@ if __name__ == "__main__":
             # We only have one policy (calling it "shared").
             # Class, obs/act-spaces, and config will be derived
             # automatically.
-            "policies": {"shared_policy": "CnnPolicy"},
+            "policies": {"shared_policy"},
             # Always use "shared" policy.
             "policy_mapping_fn": (
-                # lambda agent_id, episode, worker, **kwargs: "shared_policy"
-                lambda agent_id : "shared_policy"
+                lambda agent_id, episode, worker, **kwargs: "shared_policy"
             ),
         },
     ).fit()

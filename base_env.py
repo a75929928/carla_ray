@@ -57,6 +57,8 @@ class BaseEnv(MultiAgentEnv):
         self.speed_limit = 30 # kmh
         self.hero_model = ''.join(self.experiment_config["hero_vehicle_model"]) # TODO differ hero models
 
+        self.allow_respawn = self.experiment_config["allow_respawn"]
+
         # ---- Unique variable ---- 
         self.spectator = None # spectator randomly choose hero
 
@@ -115,7 +117,9 @@ class BaseEnv(MultiAgentEnv):
         processed_obs = self.process_observation(self.core, obs)
         rewards = self.compute_reward(self.core, obs, self.map)
         terminateds, need_respawn = self.get_done_status()
-        if need_respawn: self.respawn_hero(self.core.world, False, terminateds)
+        
+        if need_respawn and self.allow_respawn: 
+            self.respawn_hero(self.core.world, False, terminateds)
         
         truncateds = copy(terminateds)
         for hero_id in truncateds:

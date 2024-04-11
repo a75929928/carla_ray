@@ -55,6 +55,7 @@ EXPERIMENT_CONFIG = {
 
     "Disable_Rendering_Mode": False, # add to disable rendering
     "n_heroes": 5,
+    "allow_respawn": False,
     # "Autodrive_enabled": True,
 }
 
@@ -99,12 +100,12 @@ class MultiEnvBirdview(BaseEnv):
             hero_id: self.set_single_action_space() for hero_id in self.hero
         })    
 
-
     # default: every agent share same observation space and action space
     def set_single_observation_space(self):
         birdview_size = self.experiment_config["BIRDVIEW_CONFIG"]["SIZE"]
         num_of_channels = 3
         framestack = self.experiment_config["BIRDVIEW_CONFIG"]["FRAMESTACK"]
+        
         image_space = spaces.Box(
             low=0.0, high=1.0,
             shape=(birdview_size, birdview_size, num_of_channels * framestack),
@@ -211,7 +212,7 @@ if __name__ == '__main__':
             action_coast.update({hero_id: 0})
             action_rush.update({hero_id: 1})
         action_random = {agent_id: single_action_space.sample() for agent_id, single_action_space in env.action_space.items()}
-        observation, reward, terminateds, truncateds, info = env.step(action_rush) 
+        observation, reward, terminateds, truncateds, info = env.step(action_random) 
         
         # random_hero_id = random.choice(list(heroes))
         # random_hero = heroes[random_hero_id]
