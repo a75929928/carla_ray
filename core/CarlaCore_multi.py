@@ -121,14 +121,14 @@ class CarlaCore:
 
         # Run the server process
         server_command = [
-            "D:\Code\CARLA_0.9.15\CarlaUE4.exe",
+            "D:\Code\carla\CARLA_0.9.15\CarlaUE4.exe",
             "-windowed",
             "-ResX=84",
             "-ResY=84",
             "--carla-rpc-port={}".format(self.server_port),
             "-quality-level =",
             self.experiment_config["quality_level"],
-            "--no-rendering",
+            "-no-rendering",
         ]
 
         server_command_text = " ".join(map(str, server_command))

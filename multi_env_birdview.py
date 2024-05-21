@@ -10,6 +10,30 @@ from gymnasium import spaces
 import carla
 # import gc
 
+import os
+CARLA_ROOT = os.getenv('1', 'D:\Code\carla\CARLA_0.9.15')
+WORK_DIR = os.getenv('2', 'D:\Code\.SOTA\carla_garage')
+CARLA_SERVER = f'{CARLA_ROOT}\\CarlaUE4.exe'
+
+PYTHONPATH = os.environ.get('PYTHONPATH', '')
+
+PYTHONPATH += f';{CARLA_ROOT}\\PythonAPI'
+PYTHONPATH += f';{CARLA_ROOT}\\PythonAPI\\carla'
+# PYTHONPATH += f';C:\\users\\forgiven\miniconda3\envs\garage\lib\site-packages\carla\libcarla.cp37-win_amd64.pyd'
+PYTHONPATH += f';{CARLA_ROOT}\\PythonAPI\\carla\\dist\\carla-0.9.10-py3.7-win-amd64.egg'
+
+# Use newest leaderboard and scenario_runner
+PYTHONPATH += f';{WORK_DIR}\\scenario_runner'
+PYTHONPATH += f';{WORK_DIR}\\leaderboard'
+# PYTHONPATH += f';D:\Code\scenario_runner'
+# PYTHONPATH += f';D:\Code\leaderboard' 
+
+os.environ['PYTHONPATH'] = PYTHONPATH
+
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+
 SERVER_VIEW_CONFIG = {
     # "server_view_x_offset": 00,
     # "server_view_y_offset": 00,
@@ -54,7 +78,7 @@ EXPERIMENT_CONFIG = {
     "hero_vehicle_model": "vehicle.lincoln.mkz_2017",
 
     "Disable_Rendering_Mode": False, # add to disable rendering
-    "n_heroes": 5,
+    "n_heroes": 1,
     "allow_respawn": False,
     # "Autodrive_enabled": True,
 }
@@ -189,6 +213,17 @@ class MultiEnvBirdview(BaseEnv):
         
         return reward
 
+from srunner.autoagents.autonomous_agent import AutonomousAgent
+from examples.example_agents import AutopilotAgent
+from srunner.scenariomanager.timer import GameTime
+def get_policy_for_agent(agent: AutonomousAgent):
+    def policy(obs):
+        control = agent.run_step(input_data=obs, timestamp=GameTime.get_time())
+        action = np.array([control.throttle, control.steer, control.brake])
+        return action
+
+    return policy
+
 import random
 if __name__ == '__main__':
     
@@ -203,17 +238,25 @@ if __name__ == '__main__':
     )
     
     env = MultiEnvBirdview(env_config)
-    env.reset()
-    while 1:
-        heroes = env.hero
-        action_coast = {}
-        action_rush = {}
-        for hero_id in heroes:
-            action_coast.update({hero_id: 0})
-            action_rush.update({hero_id: 1})
-        action_random = {agent_id: single_action_space.sample() for agent_id, single_action_space in env.action_space.items()}
-        observation, reward, terminateds, truncateds, info = env.step(action_random) 
-        
-        # random_hero_id = random.choice(list(heroes))
-        # random_hero = heroes[random_hero_id]
-        # surrounding_vehicles = env.core.get_nearby_vehicles(random_hero_id, random_hero, max_distance=200)
+    
+    for i in range(15):
+        obs, info = env.reset()
+        agent = AutopilotAgent(role_name="hero", carla_host="localhost", carla_port=env.core.tm_port)
+        only_hero = list(obs.keys())[0]
+        agent.setup(path_to_conf_file="", route=env.route[only_hero])
+        policy = get_policy_for_agent(agent)
+        done = False
+        while not done:
+            heroes = env.hero
+            action_coast = {}
+            action_rush = {}
+            for hero_id in heroes:
+                action_coast.update({hero_id: 0})
+                action_rush.update({hero_id: 1})
+            action_random = {agent_id: single_action_space.sample() for agent_id, single_action_space in env.action_space.items()}
+            action_auto = {agent: policy(o) for agent, o in obs.items()}
+            obs, reward, terminateds, truncateds, info = env.step(action_auto) 
+            
+            # random_hero_id = random.choice(list(heroes))
+            # random_hero = heroes[random_hero_id]
+            # surrounding_vehicles = env.core.get_nearby_vehicles(random_hero_id, random_hero, max_distance=200)

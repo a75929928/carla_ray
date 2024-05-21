@@ -30,7 +30,7 @@ from typing import Union, Dict, AnyStr, Optional, Tuple
 
 # add route planning
 import sys
-sys.path.append('D:/Code/CARLA_0.9.15/PythonAPI/carla') # tweak to where you put carla
+sys.path.append('D:/Code/carla/CARLA_0.9.15/PythonAPI/carla') # tweak to where you put carla
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 
 '''
@@ -39,9 +39,9 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 '''
 from params import *
 
-from ray.rllib.env.multi_agent_env import MultiAgentEnv
-class BaseEnv(MultiAgentEnv):
-# class BaseEnv(gym.Env):
+# from ray.rllib.env.multi_agent_env import MultiAgentEnv
+# class BaseEnv(MultiAgentEnv):
+class BaseEnv(gym.Env):
 
     def __init__(self, config):
 

@@ -1,18 +1,12 @@
 # Carla-Ray-RLib
 Reinforcement Learning with Rlib and Carla
 
-![Cloud Based Autonomous Driving RL](https://github.com/layssi/Carla_Ray_Rlib/blob/master/docs/thumbnail_CARLA_RAY.jpg  "Cloud Based Autonomous Driving RL")
-
 
 # Setup Carla
 ## Download Carla Binaries
-### (Option 1) Release 0.9.10:
 wget http://carla-assets-internal.s3.amazonaws.com/Releases/Linux/CARLA_0.9.10.tar.gz  
 **Optional:** wget http://carla-assets-internal.s3.amazonaws.com/Releases/Linux/Town06_0.9.10.tar.gz  
 **Optional:** wget http://carla-assets-internal.s3.amazonaws.com/Releases/Linux/Town07_0.9.10.tar.gz  
-
-### (Option 2)Latest Build (Warning. Not Tested)
-http://carla-assets-internal.s3.amazonaws.com/Releases/Linux/Dev/CARLA_Latest.tar.gz
 
 ## Setup Carla
 ### To lower Carla GPU usage (This might be already set):
